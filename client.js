@@ -5,6 +5,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const STORAGE_KEY = 'dsh-multi-gemini-api:v1';
     const NO_ACTIVE_REF = 'DSH_MULTI_GEMINI_NO_ACTIVE_KEY';
+    let pluginContext;
 
     function readState() {
       try {
@@ -45,11 +46,12 @@ window.__ModuleLoader__.load({
 
       async function setProfileRef(ref) {
         const path = [...(Array.isArray(provider.settingsPath) ? provider.settingsPath : ['providers', 'google']), 'apiKeyEnv'];
-        await window.__dshMultiGeminiContext.remote.settings.mutate(
+        const response = await pluginContext.remote.settings.mutate(
           provider.settingsNs,
           [{ op: 'set', path, value: ref }],
           undefined
         );
+        if (!response.ok) throw new Error(response.error.message);
       }
 
       async function addKey() {
@@ -61,7 +63,8 @@ window.__ModuleLoader__.load({
             ? window.crypto.randomUUID().replace(/-/g, '')
             : (Date.now().toString(16) + Math.random().toString(16).slice(2));
           const ref = 'DSH_MULTI_GEMINI_' + id.toUpperCase();
-          await window.__dshMultiGeminiContext.remote.credentials.set(ref, value);
+          const response = await pluginContext.remote.credentials.set(ref, value);
+          if (!response.ok) throw new Error(response.error.message);
           const item = { id, ref, label: label.trim() || ('Gemini Key ' + (state.keys.length + 1)), enabled: true, savedAt: new Date().toISOString(), lastSelectedAt: null };
           setState(current => ({ ...current, keys: [...current.keys, item] }));
           setSecret(''); setLabel('');
@@ -109,7 +112,8 @@ window.__ModuleLoader__.load({
         setBusy(true); setError(''); setMessage('');
         try {
           if (state.activeId === item.id) await setProfileRef(NO_ACTIVE_REF);
-          await window.__dshMultiGeminiContext.remote.credentials.unset(item.ref);
+          const response = await pluginContext.remote.credentials.unset(item.ref);
+          if (!response.ok) throw new Error(response.error.message);
           setState(current => ({
             keys: current.keys.filter(key => key.id !== item.id),
             activeId: current.activeId === item.id ? null : current.activeId
@@ -161,7 +165,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots', 'remote', 'remote.credentials', 'remote.settings'],
       apply(ctx) {
-        window.__dshMultiGeminiContext = ctx;
+        pluginContext = ctx;
         ctx.effect(() => {
           ctx.slots.inject('settings.models.provider-card', () => ctx.slots.register({
             name: 'settings.models.provider-card',
@@ -169,7 +173,7 @@ window.__ModuleLoader__.load({
             entryKey: 'llm-pi-ai',
             order: 20
           }, MultiGeminiCard));
-          return () => { delete window.__dshMultiGeminiContext; };
+          return () => { pluginContext = undefined; };
         }, 'dsh-multi-gemini-api: Google provider card');
       }
     };
