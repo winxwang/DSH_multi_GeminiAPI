@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-multi-gemini-api
+      name: '@local/dsh-multi-gemini-api'
